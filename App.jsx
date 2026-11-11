@@ -20,70 +20,25 @@ function nMonthsAhead(n) {
   return d.toISOString().split("T")[0];
 }
 
-const emptyForm = { od: "", do: "", opis: "", godz: "", status: "✅ Zatwierdzone", calEventId: null };
+const emptyForm = { od: "", do: "", opis: "", godz: "", status: "✅ Zatwierdzone" };
 
-// ── Google Calendar API (token from Google login, see main.jsx) ──────
-const GCAL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-const VACATION_RE = /urlop|wolne|holiday|vacation|leave|day.?off|annual|🏖/i;
-
+// ── "Add to Google Calendar" link (no login, no setup) ─────
 function addDays(iso, n) {
   const d = new Date(iso + "T12:00:00Z");
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 
-async function gcal(path, opts = {}) {
-  const token = window.gcalToken?.();
-  if (!token) throw new Error("NO_TOKEN");
-  const res = await fetch(GCAL + path, {
-    ...opts,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(opts.headers || {}) },
-  });
-  if (res.status === 401) { window.gcalClearToken?.(); throw new Error("NO_TOKEN"); }
-  if (res.status === 404 || res.status === 410) return null; // already deleted
-  if (!res.ok) throw new Error(`Google ${res.status}`);
-  return res.status === 204 ? null : res.json();
-}
-
-async function gcalFetchVacations() {
+function gcalLink(w) {
+  const start = w.od.replaceAll("-", "");
+  const end = addDays(w.do || w.od, 1).replaceAll("-", ""); // all-day end date is exclusive
   const params = new URLSearchParams({
-    timeMin: new Date(Date.now() - 365 * 86400000).toISOString(),
-    timeMax: new Date(nMonthsAhead(12) + "T23:59:59Z").toISOString(),
-    singleEvents: "true", orderBy: "startTime", maxResults: "2500",
+    action: "TEMPLATE",
+    text: `🏖 ${w.opis || "Urlop"}`,
+    dates: `${start}/${end}`,
+    details: `Urlop: ${w.godz} h (Urlop Tracker)`,
   });
-  const data = await gcal("?" + params);
-  return (data?.items || [])
-    .filter(e => e.status !== "cancelled" && (e.eventType === "outOfOffice" || VACATION_RE.test(e.summary || "")))
-    .map(e => {
-      const startDate = e.start?.date || (e.start?.dateTime || "").slice(0, 10);
-      const endDate = e.end?.date ? addDays(e.end.date, -1) : (e.end?.dateTime || "").slice(0, 10);
-      return { title: e.summary || "Urlop", startDate, endDate: endDate || startDate, calEventId: e.id };
-    });
-}
-
-async function gcalCreate(title, startDate, endDate) {
-  const ev = await gcal("", {
-    method: "POST",
-    body: JSON.stringify({
-      summary: `🏖 ${title}`,
-      start: { date: startDate },
-      end: { date: addDays(endDate, 1) }, // Google: all-day end date is exclusive
-      transparency: "opaque",
-    }),
-  });
-  return { eventId: ev?.id || null, success: Boolean(ev?.id) };
-}
-
-async function gcalUpdate(eventId, title, startDate, endDate) {
-  const ev = await gcal("/" + encodeURIComponent(eventId), {
-    method: "PATCH",
-    body: JSON.stringify({ summary: `🏖 ${title}`, start: { date: startDate }, end: { date: addDays(endDate, 1) } }),
-  });
-  return ev?.id || null; // null = event was deleted in Google
-}
-
-async function gcalDelete(eventId) {
-  await gcal("/" + encodeURIComponent(eventId), { method: "DELETE" });
+  return `https://calendar.google.com/calendar/render?${params}`;
 }
 
 // ── App ───────────────────────────────────────────────────
@@ -97,7 +52,6 @@ export default function App() {
   const [editPula, setEditPula] = useState(false);
   const [tempPula, setTempPula] = useState("200");
   const [view, setView]         = useState("home");
-  const [syncing, setSyncing]   = useState(false);
   const [syncMsg, setSyncMsg]   = useState("");
   const [saving, setSaving]     = useState(false);
 
@@ -134,7 +88,7 @@ export default function App() {
   function otworzForm(wpis = null) {
     if (wpis) {
       setEditId(wpis.id);
-      setForm({ od: wpis.od, do: wpis.do, opis: wpis.opis, godz: String(wpis.godz), status: wpis.status, calEventId: wpis.calEventId || null });
+      setForm({ od: wpis.od, do: wpis.do, opis: wpis.opis, godz: String(wpis.godz), status: wpis.status });
     } else {
       setEditId(null);
       setForm(emptyForm);
@@ -142,48 +96,18 @@ export default function App() {
     setShowForm(true);
   }
 
-  function flash(msg, ms = 4000) {
-    setSyncMsg(msg);
-    setTimeout(() => setSyncMsg(""), ms);
-  }
-
   async function zapiszWpis() {
     const g = parseFloat(form.godz);
     if (!form.godz || isNaN(g) || g <= 0) return;
     setSaving(true);
-    let calEventId = form.calEventId;
-    const title = form.opis || "Urlop";
-    const end = form.do || form.od;
-    if (form.od) {
-      try {
-        if (calEventId) {
-          const prev = wpisy.find(w => w.id === editId);
-          if (!prev || prev.od !== form.od || prev.do !== form.do || prev.opis !== form.opis) {
-            calEventId = await gcalUpdate(calEventId, title, form.od, end);
-            if (!calEventId) calEventId = (await gcalCreate(title, form.od, end)).eventId;
-          }
-        } else {
-          calEventId = (await gcalCreate(title, form.od, end)).eventId;
-        }
-      } catch (e) {
-        flash(e.message === "NO_TOKEN"
-          ? "💾 Zapisano. Połącz Google Calendar, a wpis trafi do kalendarza przy synchronizacji."
-          : "💾 Zapisano, ale Google Calendar zwrócił błąd: " + e.message, 6000);
-      }
-    }
-    const entry = { ...form, godz: g, calEventId, id: editId || Date.now() };
+    const entry = { ...form, godz: g, id: editId || Date.now() };
     if (editId) setWpisy(w => w.map(x => x.id === editId ? entry : x));
     else        setWpisy(w => [...w, entry]);
     setSaving(false);
     setShowForm(false);
   }
 
-  async function usunWpis(id) {
-    const wpis = wpisy.find(w => w.id === id);
-    if (wpis?.calEventId) {
-      try { await gcalDelete(wpis.calEventId); }
-      catch (e) { flash("🗑 Usunięto z trackera. W Google Calendar usuń ręcznie (brak połączenia)."); }
-    }
+  function usunWpis(id) {
     setWpisy(w => w.filter(x => x.id !== id));
   }
 
@@ -191,52 +115,6 @@ export default function App() {
     const v = parseFloat(tempPula);
     if (!isNaN(v) && v > 0) setPula(v);
     setEditPula(false);
-  }
-
-  async function syncFromCalendar() {
-    if (!window.gcalToken?.()) { window.gcalConnect?.(); return; }
-    setSyncing(true);
-    setSyncMsg("Synchronizacja z Google Calendar…");
-    try {
-      // 1. Push entries that have dates but are not in Google yet.
-      let pushed = 0;
-      const newWpisy = [];
-      for (const w of wpisy) {
-        if (w.od && !w.calEventId) {
-          const r = await gcalCreate(w.opis || "Urlop", w.od, w.do || w.od);
-          newWpisy.push({ ...w, calEventId: r.eventId });
-          pushed++;
-        } else newWpisy.push(w);
-      }
-      // 2. Import vacation events from Google that are not in the tracker.
-      const events = await gcalFetchVacations();
-      let added = 0;
-      for (const ev of events) {
-        const exists = newWpisy.some(w =>
-          (w.calEventId && w.calEventId === ev.calEventId) ||
-          (w.opis === ev.title && w.od === ev.startDate)
-        );
-        if (!exists) {
-          const days = (ev.startDate && ev.endDate)
-            ? Math.max(1, Math.round((new Date(ev.endDate) - new Date(ev.startDate)) / 86400000) + 1)
-            : 1;
-          newWpisy.push({
-            id: Date.now() + Math.random(),
-            opis: ev.title, od: ev.startDate, do: ev.endDate || ev.startDate,
-            godz: days * 8, status: "✅ Zatwierdzone", calEventId: ev.calEventId,
-          });
-          added++;
-        }
-      }
-      setWpisy(newWpisy);
-      flash(pushed || added
-        ? `✅ Wysłano do kalendarza: ${pushed}, zaimportowano: ${added}`
-        : "✅ Wszystko zsynchronizowane.");
-    } catch (e) {
-      if (e.message === "NO_TOKEN") { setSyncing(false); window.gcalConnect?.(); return; }
-      flash("❌ Błąd Google Calendar: " + e.message);
-    }
-    setSyncing(false);
   }
 
   return (
@@ -251,14 +129,7 @@ export default function App() {
         <button onClick={() => otworzForm()} style={{ background: "linear-gradient(135deg,#38bdf8,#818cf8)", border: "none", borderRadius: 14, padding: "10px 18px", color: "#0f172a", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>+ Dodaj</button>
       </div>
 
-      {/* SYNC */}
-      <div style={{ padding: "12px 20px 0" }}>
-        <button onClick={syncFromCalendar} disabled={syncing} style={{ width: "100%", padding: "12px", border: "1px solid rgba(66,133,244,0.4)", borderRadius: 14, background: syncing ? "rgba(66,133,244,0.1)" : "rgba(66,133,244,0.15)", color: syncing ? "#64748b" : "#93c5fd", fontSize: 13, fontWeight: 600, cursor: syncing ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          <span>{syncing ? "⏳" : "📅"}</span>
-          {syncing ? "Synchronizowanie…" : window.gcalToken?.() ? "Synchronizuj z Google Calendar" : "Połącz z Google Calendar"}
-        </button>
-        {syncMsg && <div style={{ marginTop: 8, padding: "8px 14px", background: "rgba(255,255,255,0.05)", borderRadius: 10, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{syncMsg}</div>}
-      </div>
+      {syncMsg && <div style={{ margin: "12px 20px 0", padding: "8px 14px", background: "rgba(255,255,255,0.05)", borderRadius: 10, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{syncMsg}</div>}
 
       {/* TABS */}
       <div style={{ display: "flex", margin: "16px 20px 0", background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: 4, gap: 4 }}>
@@ -315,7 +186,7 @@ export default function App() {
           {wpisy.length > 0 && (
             <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 16, padding: "14px 18px" }}>
               <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 2 }}>Statystyki</div>
-              {[["Liczba wpisów", wpisy.length], ["Zatwierdzonych", zatwierdzone.length], ["Zsync. z GCal 📅", wpisy.filter(w=>w.calEventId).length]].map(([l,v]) => (
+              {[["Liczba wpisów", wpisy.length], ["Zatwierdzonych", zatwierdzone.length]].map(([l,v]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 14 }}>
                   <span style={{ color: "#94a3b8" }}>{l}</span><span style={{ fontWeight: 700 }}>{v}</span>
                 </div>
@@ -332,18 +203,17 @@ export default function App() {
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#475569" }}>
               <div style={{ fontSize: 44, marginBottom: 12 }}>🌴</div>
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Brak wpisów</div>
-              <div style={{ fontSize: 13 }}>Kliknij „+ Dodaj" lub zsynchronizuj z Google Calendar</div>
+              <div style={{ fontSize: 13 }}>Kliknij „+ Dodaj”, żeby dodać urlop</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {wpisy.map(w => {
                 const sc = STATUS_COLORS[w.status] || STATUS_COLORS["⏳ Oczekuje"];
                 return (
-                  <div key={w.id} style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${w.calEventId ? "rgba(66,133,244,0.35)" : "rgba(255,255,255,0.08)"}`, borderRadius: 16, padding: "14px 16px" }}>
+                  <div key={w.id} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: "14px 16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div style={{ flex: 1, paddingRight: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-                          {w.calEventId && <span style={{ fontSize: 10, background: "rgba(66,133,244,0.2)", color: "#93c5fd", borderRadius: 6, padding: "2px 6px" }}>📅 GCal</span>}
                           <span style={{ fontWeight: 700, fontSize: 15 }}>{w.opis || <span style={{ color: "#475569", fontStyle: "italic", fontWeight: 400 }}>bez opisu</span>}</span>
                         </div>
                         <div style={{ fontSize: 12, color: "#64748b" }}>{w.od ? `${formatDate(w.od)}${w.do && w.do !== w.od ? ` → ${formatDate(w.do)}` : ""}` : "Brak daty"}</div>
@@ -353,6 +223,7 @@ export default function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ background: sc.bg, color: sc.text, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600 }}>{w.status}</span>
                       <div style={{ display: "flex", gap: 8 }}>
+                        {w.od && <a href={gcalLink(w)} target="_blank" rel="noopener noreferrer" title="Dodaj do Google Calendar" style={{ background: "rgba(66,133,244,0.15)", borderRadius: 10, padding: "8px 12px", color: "#93c5fd", fontSize: 14, textDecoration: "none" }}>📅</a>}
                         <button onClick={() => otworzForm(w)} style={{ background: "rgba(56,189,248,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#38bdf8", cursor: "pointer", fontSize: 14 }}>✏️</button>
                         <button onClick={() => usunWpis(w.id)} style={{ background: "rgba(239,68,68,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#ef4444", cursor: "pointer", fontSize: 14 }}>🗑</button>
                       </div>

@@ -1,10 +1,10 @@
 # 🏖 Urlop Tracker
 
-Mobilna aplikacja do śledzenia godzin urlopowych, zintegrowana z Google Calendar.
+Mobilna aplikacja do śledzenia godzin urlopowych.
 
 ## Stack
 - React 18 + Vite
-- Anthropic API (Google Calendar MCP)
+- Supabase (baza + logowanie linkiem na email)
 - Vercel (hosting)
 
 ## Uruchomienie lokalne
@@ -32,7 +32,8 @@ Supabase → Authentication → URL Configuration → Site URL = adres z Vercela
 
 - 📊 Podsumowanie z kółkiem postępu
 - 📋 Lista wpisów urlopowych
-- 📅 Synchronizacja z Google Calendar (import + tworzenie wydarzeń)
+- 📅 Przycisk „Dodaj do Google Calendar” przy wpisie (otwiera gotowe wydarzenie)
+- 💾 Eksport danych do pliku JSON
 - 💾 Dane zapisywane w Supabase (logowanie linkiem na email), przetrwają czyszczenie przeglądarki
 - 📱 W pełni mobilna
 
