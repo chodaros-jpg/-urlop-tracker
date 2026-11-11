@@ -70,6 +70,21 @@ function Root() {
   // App reads/writes through window.storage, so point it at Supabase for this user.
   window.storage = createCloudStorage(session.user.id, e => setSaveError(e ? e.message : null));
 
+  async function eksportuj() {
+    try {
+      const r = await window.storage.get("urlop-tracker-v3");
+      const data = r?.value ? JSON.parse(r.value) : { pula: 200, wpisy: [] };
+      const blob = new Blob([JSON.stringify({ eksport: new Date().toISOString(), ...data }, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `urlop-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    } catch (e) {
+      setSaveError("eksport nie udał się: " + (e?.message || e));
+    }
+  }
+
   return (
     <>
       {saveError && (
@@ -78,7 +93,10 @@ function Root() {
         </div>
       )}
       <App key={session.user.id} />
-      <div style={{ maxWidth: 430, margin: "-70px auto 0", padding: "0 20px 30px", textAlign: "center", fontSize: 12, color: "#475569" }}>
+      <div style={{ maxWidth: 430, margin: "-60px auto 0", padding: "0 20px calc(40px + env(safe-area-inset-bottom))", textAlign: "center", fontSize: 12, color: "#475569", position: "relative" }}>
+        <button onClick={eksportuj} style={{ width: "100%", padding: 12, marginBottom: 14, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, background: "rgba(255,255,255,0.04)", color: "#94a3b8", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          💾 Eksportuj dane do pliku
+        </button>
         {session.user.email} · <span onClick={() => supabase.auth.signOut()} style={{ color: "#64748b", textDecoration: "underline", cursor: "pointer" }}>Wyloguj</span>
       </div>
     </>
