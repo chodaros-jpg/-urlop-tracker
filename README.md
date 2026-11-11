@@ -23,9 +23,10 @@ npm run dev
 
 ## Supabase (zapis danych)
 
-1. Supabase → SQL Editor → wklej `supabase-setup.sql` → Run
-2. Supabase → Authentication → URL Configuration → Site URL = adres z Vercela
-3. Vercel → Settings → Environment Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` → Redeploy
+Projekt Supabase: `urlop-tracker` (eu-west-2). Tabela z `supabase-setup.sql` jest już założona,
+adres i publiczny klucz są w `supabase.js`.
+
+Supabase → Authentication → URL Configuration → Site URL = adres z Vercela.
 
 ## Funkcje
 
