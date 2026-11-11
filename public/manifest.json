@@ -4,7 +4,7 @@
   "description": "Tracker godzin urlopowych",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "background_color": "#02060f",
   "theme_color": "#0f172a",
   "orientation": "portrait",
   "icons": [
