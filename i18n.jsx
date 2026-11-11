@@ -8,7 +8,11 @@ const T = {
     tabHome: "📊 Podsumowanie",
     tabList: "📋 Wpisy",
     remaining: "Pozostało",
-    hoursOf: n => `godzin z ${n}`,
+    unitsOf: (n, u) => `${u === "d" ? "dni" : "godzin"} z ${n}`,
+    unitLabel: "Jednostka puli",
+    unitH: "godziny",
+    unitD: "dni",
+    unitHint: "Zmiana nie przelicza wpisów, tylko zmienia podpis. Ustaw pulę i wpisy w wybranej jednostce.",
     pool: "Pula ✏️",
     used: "Zużyte",
     progress: "Postęp wykorzystania",
@@ -22,8 +26,9 @@ const T = {
     addToCalendar: "Dodaj do Google Calendar",
     editEntry: "✏️ Edytuj wpis",
     newEntry: "🏖 Nowy wpis urlopowy",
-    hours: "Liczba godzin *",
-    hoursPlaceholder: "np. 8",
+    amount: u => u === "d" ? "Liczba dni *" : "Liczba godzin *",
+    amountPlaceholder: u => u === "d" ? "np. 1 lub 0,5" : "np. 8",
+    formHint: "📅 Podaj daty, a potem dodasz wpis do Google Calendar przyciskiem 📅 na liście",
     dateFrom: "Data od",
     dateTo: "Data do",
     description: "Opis",
@@ -35,7 +40,7 @@ const T = {
     addEntry: "Dodaj wpis",
     loadError: "❌ Nie udało się wczytać danych. Odśwież stronę.",
     calendarTitle: "Urlop",
-    calendarDetails: h => `Urlop: ${h} h (Urlop Tracker)`,
+    calendarDetails: (a, u) => `Urlop: ${a} ${u === "d" ? "dni" : "h"} (Urlop Tracker)`,
     statuses: { "✅ Zatwierdzone": "✅ Zatwierdzone", "⏳ Oczekuje": "⏳ Oczekuje", "❌ Odrzucone": "❌ Odrzucone" },
     // login / account
     loginIntro: "Zaloguj się, dane zapisują się w chmurze.",
@@ -57,7 +62,11 @@ const T = {
     tabHome: "📊 Summary",
     tabList: "📋 Entries",
     remaining: "Remaining",
-    hoursOf: n => `hours of ${n}`,
+    unitsOf: (n, u) => `${u === "d" ? "days" : "hours"} of ${n}`,
+    unitLabel: "Allowance unit",
+    unitH: "hours",
+    unitD: "days",
+    unitHint: "Changing the unit does not convert entries, it only changes the label. Set the allowance and entries in the unit you choose.",
     pool: "Allowance ✏️",
     used: "Used",
     progress: "Usage",
@@ -71,8 +80,9 @@ const T = {
     addToCalendar: "Add to Google Calendar",
     editEntry: "✏️ Edit entry",
     newEntry: "🏖 New holiday entry",
-    hours: "Hours *",
-    hoursPlaceholder: "e.g. 8",
+    amount: u => u === "d" ? "Days *" : "Hours *",
+    amountPlaceholder: u => u === "d" ? "e.g. 1 or 0.5" : "e.g. 8",
+    formHint: "📅 Add dates, then use the 📅 button in the list to put it in Google Calendar",
     dateFrom: "From",
     dateTo: "To",
     description: "Description",
@@ -84,7 +94,7 @@ const T = {
     addEntry: "Add entry",
     loadError: "❌ Could not load data. Refresh the page.",
     calendarTitle: "Holiday",
-    calendarDetails: h => `Holiday: ${h} h (Urlop Tracker)`,
+    calendarDetails: (a, u) => `Holiday: ${a} ${u === "d" ? "days" : "h"} (Urlop Tracker)`,
     statuses: { "✅ Zatwierdzone": "✅ Approved", "⏳ Oczekuje": "⏳ Pending", "❌ Odrzucone": "❌ Rejected" },
     loginIntro: "Sign in, your data is saved in the cloud.",
     emailPlaceholder: "Your email",
@@ -121,9 +131,9 @@ export function setLang(lang) {
   document.documentElement.lang = current;
 }
 
-export function t(key, arg) {
+export function t(key, arg, arg2) {
   const v = T[current][key] ?? T.pl[key] ?? key;
-  return typeof v === "function" ? v(arg) : v;
+  return typeof v === "function" ? v(arg, arg2) : v;
 }
 
 export const tStatus = s => T[current].statuses[s] || s;

@@ -30,14 +30,14 @@ function addDays(iso, n) {
   return d.toISOString().slice(0, 10);
 }
 
-function gcalLink(w) {
+function gcalLink(w, unit) {
   const start = w.od.replaceAll("-", "");
   const end = addDays(w.do || w.od, 1).replaceAll("-", ""); // all-day end date is exclusive
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: `🏖 ${w.opis || t("calendarTitle")}`,
     dates: `${start}/${end}`,
-    details: t("calendarDetails", w.godz),
+    details: t("calendarDetails", w.godz, unit),
   });
   return `https://calendar.google.com/calendar/render?${params}`;
 }
@@ -45,6 +45,7 @@ function gcalLink(w) {
 // ── App ───────────────────────────────────────────────────
 export default function App() {
   const [pula, setPula]         = useState(200);
+  const [unit, setUnit]         = useState("h"); // "h" = hours, "d" = days (saved per user)
   const [wpisy, setWpisy]       = useState([]);
   const [loaded, setLoaded]     = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -63,6 +64,7 @@ export default function App() {
         if (r?.value) {
           const d = JSON.parse(r.value);
           setPula(d.pula ?? 200);
+          setUnit(d.unit === "d" ? "d" : "h");
           setTempPula(String(d.pula ?? 200));
           setWpisy(d.wpisy ?? []);
         }
@@ -76,8 +78,8 @@ export default function App() {
 
   useEffect(() => {
     if (!loaded) return;
-    window.storage.set(STORAGE_KEY, JSON.stringify({ pula, wpisy })).catch(() => {});
-  }, [pula, wpisy, loaded]);
+    window.storage.set(STORAGE_KEY, JSON.stringify({ pula, wpisy, unit })).catch(() => {});
+  }, [pula, wpisy, unit, loaded]);
 
   const zatwierdzone = wpisy.filter(w => w.status === "✅ Zatwierdzone");
   const wykorzystane = zatwierdzone.reduce((s, w) => s + Number(w.godz || 0), 0);
@@ -85,6 +87,8 @@ export default function App() {
   const pct          = pula > 0 ? Math.min(100, (wykorzystane / pula) * 100) : 0;
   const progColor    = pct > 85 ? "#ef4444" : pct > 60 ? "#f59e0b" : "#10b981";
   const C            = 2 * Math.PI * 38;
+  const u            = unit === "d" ? "d" : "h";
+  const fmt          = n => (n % 1 === 0 ? n : n.toFixed(1));
 
   function otworzForm(wpis = null) {
     if (wpis) {
@@ -150,8 +154,8 @@ export default function App() {
             </svg>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>{t("remaining")}</div>
-              <div style={{ fontSize: 42, fontWeight: 800, color: progColor, lineHeight: 1 }}>{pozostalo % 1 === 0 ? pozostalo : pozostalo.toFixed(1)}</div>
-              <div style={{ fontSize: 13, color: "#64748b" }}>{t("hoursOf", pula)}</div>
+              <div style={{ fontSize: 42, fontWeight: 800, color: progColor, lineHeight: 1 }}>{fmt(pozostalo)}</div>
+              <div style={{ fontSize: 13, color: "#64748b" }}>{t("unitsOf", pula, unit)}</div>
             </div>
           </div>
 
@@ -159,17 +163,25 @@ export default function App() {
             <div onClick={() => { setEditPula(true); setTempPula(String(pula)); }} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 18, padding: "16px 14px", cursor: "pointer" }}>
               <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{t("pool")}</div>
               {editPula ? (
+                <div onClick={e => e.stopPropagation()}>
+                <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                  {[["h", t("unitH")], ["d", t("unitD")]].map(([k, l]) => (
+                    <button key={k} onClick={() => setUnit(k)} style={{ flex: 1, padding: "5px 0", border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", background: unit === k ? "#38bdf8" : "rgba(255,255,255,0.08)", color: unit === k ? "#0f172a" : "#94a3b8" }}>{l}</button>
+                  ))}
+                </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <input autoFocus type="number" value={tempPula} onChange={e => setTempPula(e.target.value)} onKeyDown={e => { if (e.key==="Enter") zatwierdzPule(); if (e.key==="Escape") setEditPula(false); }} onClick={e => e.stopPropagation()} style={{ width: "100%", background: "rgba(56,189,248,0.12)", border: "1px solid #38bdf8", borderRadius: 8, padding: "6px 8px", color: "#38bdf8", fontSize: 20, fontWeight: 800, outline: "none" }}/>
+                  <input autoFocus type="number" step="0.5" value={tempPula} onChange={e => setTempPula(e.target.value)} onKeyDown={e => { if (e.key==="Enter") zatwierdzPule(); if (e.key==="Escape") setEditPula(false); }} onClick={e => e.stopPropagation()} style={{ width: "100%", background: "rgba(56,189,248,0.12)", border: "1px solid #38bdf8", borderRadius: 8, padding: "6px 8px", color: "#38bdf8", fontSize: 20, fontWeight: 800, outline: "none" }}/>
                   <button onClick={e => { e.stopPropagation(); zatwierdzPule(); }} style={{ background: "#38bdf8", border: "none", borderRadius: 8, padding: "7px 10px", color: "#0f172a", fontWeight: 800, cursor: "pointer" }}>✓</button>
                 </div>
+                <div style={{ fontSize: 10, color: "#64748b", marginTop: 6, lineHeight: 1.3 }}>{t("unitHint")}</div>
+                </div>
               ) : (
-                <div style={{ fontSize: 32, fontWeight: 800, color: "#38bdf8" }}>{pula}<span style={{ fontSize: 13, color: "#64748b", fontWeight: 400 }}> h</span></div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: "#38bdf8" }}>{pula}<span style={{ fontSize: 13, color: "#64748b", fontWeight: 400 }}> {u}</span></div>
               )}
             </div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 18, padding: "16px 14px" }}>
               <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{t("used")}</div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#f59e0b" }}>{wykorzystane % 1 === 0 ? wykorzystane : wykorzystane.toFixed(1)}<span style={{ fontSize: 13, color: "#64748b", fontWeight: 400 }}> h</span></div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: "#f59e0b" }}>{fmt(wykorzystane)}<span style={{ fontSize: 13, color: "#64748b", fontWeight: 400 }}> {u}</span></div>
             </div>
           </div>
 
@@ -181,7 +193,7 @@ export default function App() {
             <div style={{ height: 10, background: "rgba(255,255,255,0.08)", borderRadius: 99, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg,${progColor},${progColor}99)`, borderRadius: 99, transition: "width 0.7s ease" }}/>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: "#475569" }}><span>0 h</span><span>{pula} h</span></div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 11, color: "#475569" }}><span>0 {u}</span><span>{pula} {u}</span></div>
           </div>
 
           {wpisy.length > 0 && (
@@ -219,12 +231,12 @@ export default function App() {
                         </div>
                         <div style={{ fontSize: 12, color: "#64748b" }}>{w.od ? `${formatDate(w.od)}${w.do && w.do !== w.od ? ` → ${formatDate(w.do)}` : ""}` : t("noDate")}</div>
                       </div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#f59e0b", flexShrink: 0 }}>{w.godz}h</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#f59e0b", flexShrink: 0 }}>{w.godz}{u}</div>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ background: sc.bg, color: sc.text, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600 }}>{tStatus(w.status)}</span>
                       <div style={{ display: "flex", gap: 8 }}>
-                        {w.od && <a href={gcalLink(w)} target="_blank" rel="noopener noreferrer" title={t("addToCalendar")} style={{ background: "rgba(66,133,244,0.15)", borderRadius: 10, padding: "8px 12px", color: "#93c5fd", fontSize: 14, textDecoration: "none" }}>📅</a>}
+                        {w.od && <a href={gcalLink(w, unit)} target="_blank" rel="noopener noreferrer" title={t("addToCalendar")} style={{ background: "rgba(66,133,244,0.15)", borderRadius: 10, padding: "8px 12px", color: "#93c5fd", fontSize: 14, textDecoration: "none" }}>📅</a>}
                         <button onClick={() => otworzForm(w)} style={{ background: "rgba(56,189,248,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#38bdf8", cursor: "pointer", fontSize: 14 }}>✏️</button>
                         <button onClick={() => usunWpis(w.id)} style={{ background: "rgba(239,68,68,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#ef4444", cursor: "pointer", fontSize: 14 }}>🗑</button>
                       </div>
@@ -243,11 +255,11 @@ export default function App() {
           <div style={{ background: "#1e293b", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", width: "100%", maxWidth: 430, margin: "0 auto", border: "1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 99, margin: "0 auto 20px" }}/>
             <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>{editId ? t("editEntry") : t("newEntry")}</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>📅 Podaj daty → wpis trafi automatycznie do Google Calendar</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>{t("formHint")}</div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>{t("hours")}</label>
-              <input type="number" min="0.5" step="0.5" placeholder={t("hoursPlaceholder")} value={form.godz} onChange={e => setForm(x => ({ ...x, godz: e.target.value }))} style={{ ...inp, fontSize: 28, fontWeight: 800, color: "#38bdf8", textAlign: "center", padding: "14px" }}/>
+              <label style={lbl}>{t("amount", u)}</label>
+              <input type="number" min="0.5" step="0.5" placeholder={t("amountPlaceholder", u)} value={form.godz} onChange={e => setForm(x => ({ ...x, godz: e.target.value }))} style={{ ...inp, fontSize: 28, fontWeight: 800, color: "#38bdf8", textAlign: "center", padding: "14px" }}/>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>

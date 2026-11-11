@@ -43,3 +43,6 @@ Supabase → Authentication → URL Configuration → Site URL = adres z Vercela
 - [ ] Backend: Supabase + Make.com webhooks
 - [ ] Powiadomienia push
 - [ ] Multi-user (dla HR)
+
+## Godziny albo dni
+Przełącznik jednostki (godziny / dni, kroki co 0,5) jest w edycji puli (klik w kafelek „Pula"). Ustawienie zapisuje się osobno dla każdego użytkownika.
