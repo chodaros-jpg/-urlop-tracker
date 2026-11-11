@@ -22,3 +22,15 @@ create policy "own rows update" on public.urlop_storage
 
 create policy "own rows delete" on public.urlop_storage
   for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- Ping target for .github/workflows/supabase-keepalive.yml (returns only the time).
+create or replace function public.keepalive()
+returns timestamptz
+language sql
+stable
+security invoker
+set search_path = ''
+as $$ select now() $$;
+
+revoke all on function public.keepalive() from public;
+grant execute on function public.keepalive() to anon, authenticated;
