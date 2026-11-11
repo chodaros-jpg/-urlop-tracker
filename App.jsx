@@ -22,57 +22,68 @@ function nMonthsAhead(n) {
 
 const emptyForm = { od: "", do: "", opis: "", godz: "", status: "✅ Zatwierdzone", calEventId: null };
 
-// ── Anthropic + Google Calendar MCP ──────────────────────
-const ANTHROPIC_API = "https://api.anthropic.com/v1/messages";
+// ── Google Calendar API (token from Google login, see main.jsx) ──────
+const GCAL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const VACATION_RE = /urlop|wolne|holiday|vacation|leave|day.?off|annual|🏖/i;
 
-async function callAI(userPrompt, systemPrompt) {
-  const res = await fetch(ANTHROPIC_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-      mcp_servers: [{ type: "url", url: "https://gcal.mcp.claude.com/mcp", name: "google-calendar" }]
-    })
+function addDays(iso, n) {
+  const d = new Date(iso + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+async function gcal(path, opts = {}) {
+  const token = window.gcalToken?.();
+  if (!token) throw new Error("NO_TOKEN");
+  const res = await fetch(GCAL + path, {
+    ...opts,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(opts.headers || {}) },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-function extractText(data) {
-  return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-}
-
-function parseJSON(text) {
-  try { return JSON.parse(text.trim().replace(/```json|```/g, "").trim()); }
-  catch { return null; }
+  if (res.status === 401) { window.gcalClearToken?.(); throw new Error("NO_TOKEN"); }
+  if (res.status === 404 || res.status === 410) return null; // already deleted
+  if (!res.ok) throw new Error(`Google ${res.status}`);
+  return res.status === 204 ? null : res.json();
 }
 
 async function gcalFetchVacations() {
-  const today = new Date().toISOString().split("T")[0];
-  const ahead = nMonthsAhead(6);
-  const data = await callAI(
-    `List calendar events from ${today} to ${ahead}. Find all vacation, leave, urlop, wolne, holiday, day-off events. Return ONLY a raw JSON array:\n[{"title":"...","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","calEventId":"..."}]\nIf none, return [].`,
-    "You manage Google Calendar. Return only raw JSON array, no markdown, no explanation."
-  );
-  return parseJSON(extractText(data)) || [];
+  const params = new URLSearchParams({
+    timeMin: new Date(Date.now() - 365 * 86400000).toISOString(),
+    timeMax: new Date(nMonthsAhead(12) + "T23:59:59Z").toISOString(),
+    singleEvents: "true", orderBy: "startTime", maxResults: "2500",
+  });
+  const data = await gcal("?" + params);
+  return (data?.items || [])
+    .filter(e => e.status !== "cancelled" && (e.eventType === "outOfOffice" || VACATION_RE.test(e.summary || "")))
+    .map(e => {
+      const startDate = e.start?.date || (e.start?.dateTime || "").slice(0, 10);
+      const endDate = e.end?.date ? addDays(e.end.date, -1) : (e.end?.dateTime || "").slice(0, 10);
+      return { title: e.summary || "Urlop", startDate, endDate: endDate || startDate, calEventId: e.id };
+    });
 }
 
 async function gcalCreate(title, startDate, endDate) {
-  const data = await callAI(
-    `Create an all-day calendar event: title="${title}", from ${startDate} to ${endDate}. Return ONLY raw JSON: {"eventId":"...","success":true}`,
-    "You manage Google Calendar. Create events and return only raw JSON."
-  );
-  return parseJSON(extractText(data)) || { success: false };
+  const ev = await gcal("", {
+    method: "POST",
+    body: JSON.stringify({
+      summary: `🏖 ${title}`,
+      start: { date: startDate },
+      end: { date: addDays(endDate, 1) }, // Google: all-day end date is exclusive
+      transparency: "opaque",
+    }),
+  });
+  return { eventId: ev?.id || null, success: Boolean(ev?.id) };
+}
+
+async function gcalUpdate(eventId, title, startDate, endDate) {
+  const ev = await gcal("/" + encodeURIComponent(eventId), {
+    method: "PATCH",
+    body: JSON.stringify({ summary: `🏖 ${title}`, start: { date: startDate }, end: { date: addDays(endDate, 1) } }),
+  });
+  return ev?.id || null; // null = event was deleted in Google
 }
 
 async function gcalDelete(eventId) {
-  await callAI(
-    `Delete calendar event ID: ${eventId}`,
-    "You manage Google Calendar. Delete the event."
-  );
+  await gcal("/" + encodeURIComponent(eventId), { method: "DELETE" });
 }
 
 // ── App ───────────────────────────────────────────────────
@@ -131,16 +142,34 @@ export default function App() {
     setShowForm(true);
   }
 
+  function flash(msg, ms = 4000) {
+    setSyncMsg(msg);
+    setTimeout(() => setSyncMsg(""), ms);
+  }
+
   async function zapiszWpis() {
     const g = parseFloat(form.godz);
     if (!form.godz || isNaN(g) || g <= 0) return;
     setSaving(true);
     let calEventId = form.calEventId;
-    if (form.od && !calEventId) {
+    const title = form.opis || "Urlop";
+    const end = form.do || form.od;
+    if (form.od) {
       try {
-        const r = await gcalCreate(form.opis || "Urlop", form.od, form.do || form.od);
-        calEventId = r.eventId || null;
-      } catch {}
+        if (calEventId) {
+          const prev = wpisy.find(w => w.id === editId);
+          if (!prev || prev.od !== form.od || prev.do !== form.do || prev.opis !== form.opis) {
+            calEventId = await gcalUpdate(calEventId, title, form.od, end);
+            if (!calEventId) calEventId = (await gcalCreate(title, form.od, end)).eventId;
+          }
+        } else {
+          calEventId = (await gcalCreate(title, form.od, end)).eventId;
+        }
+      } catch (e) {
+        flash(e.message === "NO_TOKEN"
+          ? "💾 Zapisano. Połącz Google Calendar, a wpis trafi do kalendarza przy synchronizacji."
+          : "💾 Zapisano, ale Google Calendar zwrócił błąd: " + e.message, 6000);
+      }
     }
     const entry = { ...form, godz: g, calEventId, id: editId || Date.now() };
     if (editId) setWpisy(w => w.map(x => x.id === editId ? entry : x));
@@ -151,7 +180,10 @@ export default function App() {
 
   async function usunWpis(id) {
     const wpis = wpisy.find(w => w.id === id);
-    if (wpis?.calEventId) { try { await gcalDelete(wpis.calEventId); } catch {} }
+    if (wpis?.calEventId) {
+      try { await gcalDelete(wpis.calEventId); }
+      catch (e) { flash("🗑 Usunięto z trackera. W Google Calendar usuń ręcznie (brak połączenia)."); }
+    }
     setWpisy(w => w.filter(x => x.id !== id));
   }
 
@@ -162,18 +194,23 @@ export default function App() {
   }
 
   async function syncFromCalendar() {
+    if (!window.gcalToken?.()) { window.gcalConnect?.(); return; }
     setSyncing(true);
-    setSyncMsg("Pobieranie z Google Calendar…");
+    setSyncMsg("Synchronizacja z Google Calendar…");
     try {
-      const events = await gcalFetchVacations();
-      if (!events.length) {
-        setSyncMsg("Nie znaleziono urlopów w kalendarzu.");
-        setTimeout(() => setSyncMsg(""), 3000);
-        setSyncing(false);
-        return;
+      // 1. Push entries that have dates but are not in Google yet.
+      let pushed = 0;
+      const newWpisy = [];
+      for (const w of wpisy) {
+        if (w.od && !w.calEventId) {
+          const r = await gcalCreate(w.opis || "Urlop", w.od, w.do || w.od);
+          newWpisy.push({ ...w, calEventId: r.eventId });
+          pushed++;
+        } else newWpisy.push(w);
       }
+      // 2. Import vacation events from Google that are not in the tracker.
+      const events = await gcalFetchVacations();
       let added = 0;
-      const newWpisy = [...wpisy];
       for (const ev of events) {
         const exists = newWpisy.some(w =>
           (w.calEventId && w.calEventId === ev.calEventId) ||
@@ -192,11 +229,13 @@ export default function App() {
         }
       }
       setWpisy(newWpisy);
-      setSyncMsg(added > 0 ? `✅ Zaimportowano ${added} wydarzeń!` : "Wszystkie już są w trackerze.");
-    } catch {
-      setSyncMsg("❌ Błąd połączenia z Google Calendar.");
+      flash(pushed || added
+        ? `✅ Wysłano do kalendarza: ${pushed}, zaimportowano: ${added}`
+        : "✅ Wszystko zsynchronizowane.");
+    } catch (e) {
+      if (e.message === "NO_TOKEN") { setSyncing(false); window.gcalConnect?.(); return; }
+      flash("❌ Błąd Google Calendar: " + e.message);
     }
-    setTimeout(() => setSyncMsg(""), 4000);
     setSyncing(false);
   }
 
@@ -216,7 +255,7 @@ export default function App() {
       <div style={{ padding: "12px 20px 0" }}>
         <button onClick={syncFromCalendar} disabled={syncing} style={{ width: "100%", padding: "12px", border: "1px solid rgba(66,133,244,0.4)", borderRadius: 14, background: syncing ? "rgba(66,133,244,0.1)" : "rgba(66,133,244,0.15)", color: syncing ? "#64748b" : "#93c5fd", fontSize: 13, fontWeight: 600, cursor: syncing ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <span>{syncing ? "⏳" : "📅"}</span>
-          {syncing ? "Synchronizowanie…" : "Synchronizuj z Google Calendar"}
+          {syncing ? "Synchronizowanie…" : window.gcalToken?.() ? "Synchronizuj z Google Calendar" : "Połącz z Google Calendar"}
         </button>
         {syncMsg && <div style={{ marginTop: 8, padding: "8px 14px", background: "rgba(255,255,255,0.05)", borderRadius: 10, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{syncMsg}</div>}
       </div>
