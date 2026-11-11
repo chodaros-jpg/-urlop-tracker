@@ -1,29 +1,104 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
+import { supabase, supabaseConfigured, createCloudStorage } from './supabase.js'
 
-// Polyfill window.storage using localStorage for standalone deployment
-if (!window.storage) {
-  window.storage = {
-    get: async (key) => {
-      const value = localStorage.getItem(key)
-      return value ? { key, value } : null
-    },
-    set: async (key, value) => {
-      localStorage.setItem(key, value)
-      return { key, value }
-    },
-    delete: async (key) => {
-      localStorage.removeItem(key)
-      return { key, deleted: true }
-    },
+const wrap = { maxWidth: 430, margin: "0 auto", minHeight: "100vh", background: "#0f172a", color: "#f1f5f9", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: "40px 20px", boxSizing: "border-box" };
+const inp = { width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 12, padding: "14px", color: "#f1f5f9", fontSize: 16, outline: "none", boxSizing: "border-box", fontFamily: "inherit", marginBottom: 12 };
+const btn = { width: "100%", padding: 16, border: "none", borderRadius: 16, background: "linear-gradient(135deg,#38bdf8,#818cf8)", color: "#0f172a", fontSize: 15, fontWeight: 800, cursor: "pointer" };
+
+function Header() {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 10, letterSpacing: 3, color: "#475569", textTransform: "uppercase" }}>Automation Champions</div>
+      <div style={{ fontSize: 24, fontWeight: 800, background: "linear-gradient(90deg,#38bdf8,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>🏖 Urlop</div>
+    </div>
+  );
+}
+
+function Login() {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function send() {
+    if (!email.includes("@")) return;
+    setBusy(true); setErr("");
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setBusy(false);
+    if (error) setErr(error.message); else setSent(true);
   }
+
+  return (
+    <div style={wrap}>
+      <Header />
+      {sent ? (
+        <div style={{ color: "#94a3b8", lineHeight: 1.5 }}>
+          📧 Wysłałem link na <b style={{ color: "#f1f5f9" }}>{email}</b>.<br />
+          Otwórz go w tej samej przeglądarce, żeby się zalogować.
+        </div>
+      ) : (
+        <>
+          <div style={{ color: "#94a3b8", marginBottom: 16, fontSize: 14 }}>Zaloguj się, dane zapisują się w chmurze.</div>
+          <input type="email" placeholder="Twój email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} style={inp} />
+          <button onClick={send} disabled={busy} style={btn}>{busy ? "⏳ Wysyłanie…" : "Wyślij link logowania"}</button>
+          {err && <div style={{ marginTop: 12, color: "#fca5a5", fontSize: 13 }}>❌ {err}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Root() {
+  const [session, setSession] = useState(undefined);
+  const [saveError, setSaveError] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) return <div style={wrap}><Header /><div style={{ color: "#64748b" }}>Ładowanie…</div></div>;
+  if (!session) return <Login />;
+
+  // App reads/writes through window.storage, so point it at Supabase for this user.
+  window.storage = createCloudStorage(session.user.id, e => setSaveError(e ? e.message : null));
+
+  return (
+    <>
+      {saveError && (
+        <div style={{ position: "sticky", top: 0, zIndex: 100, background: "#7f1d1d", color: "#fecaca", padding: "10px 16px", fontSize: 13, textAlign: "center" }}>
+          ❌ Nie udało się zapisać w chmurze: {saveError}
+        </div>
+      )}
+      <App key={session.user.id} />
+      <div style={{ maxWidth: 430, margin: "-70px auto 0", padding: "0 20px 30px", textAlign: "center", fontSize: 12, color: "#475569" }}>
+        {session.user.email} · <span onClick={() => supabase.auth.signOut()} style={{ color: "#64748b", textDecoration: "underline", cursor: "pointer" }}>Wyloguj</span>
+      </div>
+    </>
+  );
+}
+
+function MissingConfig() {
+  return (
+    <div style={wrap}>
+      <Header />
+      <div style={{ color: "#fca5a5", lineHeight: 1.5 }}>
+        Brak konfiguracji Supabase. Ustaw zmienne VITE_SUPABASE_URL i VITE_SUPABASE_ANON_KEY w Vercelu i zrób redeploy.
+      </div>
+    </div>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    {supabaseConfigured ? <Root /> : <MissingConfig />}
   </React.StrictMode>,
 )
 

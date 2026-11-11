@@ -21,12 +21,18 @@ npm run dev
 3. Wybierz to repo → kliknij **Deploy**
 4. Gotowe — Vercel sam wykrywa Vite
 
+## Supabase (zapis danych)
+
+1. Supabase → SQL Editor → wklej `supabase-setup.sql` → Run
+2. Supabase → Authentication → URL Configuration → Site URL = adres z Vercela
+3. Vercel → Settings → Environment Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` → Redeploy
+
 ## Funkcje
 
 - 📊 Podsumowanie z kółkiem postępu
 - 📋 Lista wpisów urlopowych
 - 📅 Synchronizacja z Google Calendar (import + tworzenie wydarzeń)
-- 💾 Dane zapisywane lokalnie w przeglądarce
+- 💾 Dane zapisywane w Supabase (logowanie linkiem na email), przetrwają czyszczenie przeglądarki
 - 📱 W pełni mobilna
 
 ## Przyszłe plany

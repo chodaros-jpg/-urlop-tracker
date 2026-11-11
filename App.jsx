@@ -100,8 +100,11 @@ export default function App() {
           setTempPula(String(d.pula ?? 200));
           setWpisy(d.wpisy ?? []);
         }
-      } catch {}
-      setLoaded(true);
+        setLoaded(true);
+      } catch {
+        // Do not mark as loaded: otherwise the empty defaults would overwrite saved data.
+        setSyncMsg("❌ Nie udało się wczytać danych. Odśwież stronę.");
+      }
     })();
   }, []);
 
