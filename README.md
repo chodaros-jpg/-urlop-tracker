@@ -36,6 +36,7 @@ Supabase → Authentication → URL Configuration → Site URL = adres z Vercela
 - 💾 Eksport danych do pliku JSON
 - 💾 Dane zapisywane w Supabase (logowanie linkiem na email), przetrwają czyszczenie przeglądarki
 - 📱 W pełni mobilna
+- 🌍 Polski i angielski (przełącznik PL / EN na dole)
 
 ## Przyszłe plany
 

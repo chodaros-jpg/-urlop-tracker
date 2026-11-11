@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { t, tStatus } from "./i18n.jsx";
 
 const STORAGE_KEY = "urlop-tracker-v3";
 const STATUSY = ["✅ Zatwierdzone", "⏳ Oczekuje", "❌ Odrzucone"];
@@ -34,9 +35,9 @@ function gcalLink(w) {
   const end = addDays(w.do || w.od, 1).replaceAll("-", ""); // all-day end date is exclusive
   const params = new URLSearchParams({
     action: "TEMPLATE",
-    text: `🏖 ${w.opis || "Urlop"}`,
+    text: `🏖 ${w.opis || t("calendarTitle")}`,
     dates: `${start}/${end}`,
-    details: `Urlop: ${w.godz} h (Urlop Tracker)`,
+    details: t("calendarDetails", w.godz),
   });
   return `https://calendar.google.com/calendar/render?${params}`;
 }
@@ -68,7 +69,7 @@ export default function App() {
         setLoaded(true);
       } catch {
         // Do not mark as loaded: otherwise the empty defaults would overwrite saved data.
-        setSyncMsg("❌ Nie udało się wczytać danych. Odśwież stronę.");
+        setSyncMsg(t("loadError"));
       }
     })();
   }, []);
@@ -124,16 +125,16 @@ export default function App() {
       <div style={{ padding: "20px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 3, color: "#475569", textTransform: "uppercase" }}>Automation Champions</div>
-          <div style={{ fontSize: 20, fontWeight: 800, background: "linear-gradient(90deg,#38bdf8,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>🏖 Urlop</div>
+          <div style={{ fontSize: 20, fontWeight: 800, background: "linear-gradient(90deg,#38bdf8,#818cf8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>🏖 {t("appName")}</div>
         </div>
-        <button onClick={() => otworzForm()} style={{ background: "linear-gradient(135deg,#38bdf8,#818cf8)", border: "none", borderRadius: 14, padding: "10px 18px", color: "#0f172a", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>+ Dodaj</button>
+        <button onClick={() => otworzForm()} style={{ background: "linear-gradient(135deg,#38bdf8,#818cf8)", border: "none", borderRadius: 14, padding: "10px 18px", color: "#0f172a", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{t("add")}</button>
       </div>
 
       {syncMsg && <div style={{ margin: "12px 20px 0", padding: "8px 14px", background: "rgba(255,255,255,0.05)", borderRadius: 10, fontSize: 13, color: "#94a3b8", textAlign: "center" }}>{syncMsg}</div>}
 
       {/* TABS */}
       <div style={{ display: "flex", margin: "16px 20px 0", background: "rgba(255,255,255,0.06)", borderRadius: 14, padding: 4, gap: 4 }}>
-        {[["home","📊 Podsumowanie"],["lista","📋 Wpisy"]].map(([v,l]) => (
+        {[["home",t("tabHome")],["lista",t("tabList")]].map(([v,l]) => (
           <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "10px 0", border: "none", borderRadius: 11, fontSize: 13, fontWeight: 600, cursor: "pointer", background: view===v ? "rgba(56,189,248,0.2)" : "transparent", color: view===v ? "#38bdf8" : "#64748b" }}>{l}</button>
         ))}
       </div>
@@ -148,15 +149,15 @@ export default function App() {
               <text x={45} y={49} textAnchor="middle" fill={progColor} fontSize={15} fontWeight={800} fontFamily="DM Sans,sans-serif">{pct.toFixed(0)}%</text>
             </svg>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>Pozostało</div>
+              <div style={{ fontSize: 12, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>{t("remaining")}</div>
               <div style={{ fontSize: 42, fontWeight: 800, color: progColor, lineHeight: 1 }}>{pozostalo % 1 === 0 ? pozostalo : pozostalo.toFixed(1)}</div>
-              <div style={{ fontSize: 13, color: "#64748b" }}>godzin z {pula}</div>
+              <div style={{ fontSize: 13, color: "#64748b" }}>{t("hoursOf", pula)}</div>
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
             <div onClick={() => { setEditPula(true); setTempPula(String(pula)); }} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(56,189,248,0.25)", borderRadius: 18, padding: "16px 14px", cursor: "pointer" }}>
-              <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Pula ✏️</div>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{t("pool")}</div>
               {editPula ? (
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <input autoFocus type="number" value={tempPula} onChange={e => setTempPula(e.target.value)} onKeyDown={e => { if (e.key==="Enter") zatwierdzPule(); if (e.key==="Escape") setEditPula(false); }} onClick={e => e.stopPropagation()} style={{ width: "100%", background: "rgba(56,189,248,0.12)", border: "1px solid #38bdf8", borderRadius: 8, padding: "6px 8px", color: "#38bdf8", fontSize: 20, fontWeight: 800, outline: "none" }}/>
@@ -167,14 +168,14 @@ export default function App() {
               )}
             </div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: 18, padding: "16px 14px" }}>
-              <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Zużyte</div>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>{t("used")}</div>
               <div style={{ fontSize: 32, fontWeight: 800, color: "#f59e0b" }}>{wykorzystane % 1 === 0 ? wykorzystane : wykorzystane.toFixed(1)}<span style={{ fontSize: 13, color: "#64748b", fontWeight: 400 }}> h</span></div>
             </div>
           </div>
 
           <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 18, padding: "16px 18px", marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 10 }}>
-              <span>Postęp wykorzystania</span>
+              <span>{t("progress")}</span>
               <span style={{ color: progColor, fontWeight: 700 }}>{pct.toFixed(1)}%</span>
             </div>
             <div style={{ height: 10, background: "rgba(255,255,255,0.08)", borderRadius: 99, overflow: "hidden" }}>
@@ -185,8 +186,8 @@ export default function App() {
 
           {wpisy.length > 0 && (
             <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 16, padding: "14px 18px" }}>
-              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 2 }}>Statystyki</div>
-              {[["Liczba wpisów", wpisy.length], ["Zatwierdzonych", zatwierdzone.length]].map(([l,v]) => (
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10, textTransform: "uppercase", letterSpacing: 2 }}>{t("stats")}</div>
+              {[[t("entriesCount"), wpisy.length], [t("approvedCount"), zatwierdzone.length]].map(([l,v]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", fontSize: 14 }}>
                   <span style={{ color: "#94a3b8" }}>{l}</span><span style={{ fontWeight: 700 }}>{v}</span>
                 </div>
@@ -202,8 +203,8 @@ export default function App() {
           {wpisy.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#475569" }}>
               <div style={{ fontSize: 44, marginBottom: 12 }}>🌴</div>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Brak wpisów</div>
-              <div style={{ fontSize: 13 }}>Kliknij „+ Dodaj”, żeby dodać urlop</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{t("noEntries")}</div>
+              <div style={{ fontSize: 13 }}>{t("noEntriesHint")}</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -214,16 +215,16 @@ export default function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div style={{ flex: 1, paddingRight: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 700, fontSize: 15 }}>{w.opis || <span style={{ color: "#475569", fontStyle: "italic", fontWeight: 400 }}>bez opisu</span>}</span>
+                          <span style={{ fontWeight: 700, fontSize: 15 }}>{w.opis || <span style={{ color: "#475569", fontStyle: "italic", fontWeight: 400 }}>{t("noDescription")}</span>}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: "#64748b" }}>{w.od ? `${formatDate(w.od)}${w.do && w.do !== w.od ? ` → ${formatDate(w.do)}` : ""}` : "Brak daty"}</div>
+                        <div style={{ fontSize: 12, color: "#64748b" }}>{w.od ? `${formatDate(w.od)}${w.do && w.do !== w.od ? ` → ${formatDate(w.do)}` : ""}` : t("noDate")}</div>
                       </div>
                       <div style={{ fontSize: 22, fontWeight: 800, color: "#f59e0b", flexShrink: 0 }}>{w.godz}h</div>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ background: sc.bg, color: sc.text, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600 }}>{w.status}</span>
+                      <span style={{ background: sc.bg, color: sc.text, borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600 }}>{tStatus(w.status)}</span>
                       <div style={{ display: "flex", gap: 8 }}>
-                        {w.od && <a href={gcalLink(w)} target="_blank" rel="noopener noreferrer" title="Dodaj do Google Calendar" style={{ background: "rgba(66,133,244,0.15)", borderRadius: 10, padding: "8px 12px", color: "#93c5fd", fontSize: 14, textDecoration: "none" }}>📅</a>}
+                        {w.od && <a href={gcalLink(w)} target="_blank" rel="noopener noreferrer" title={t("addToCalendar")} style={{ background: "rgba(66,133,244,0.15)", borderRadius: 10, padding: "8px 12px", color: "#93c5fd", fontSize: 14, textDecoration: "none" }}>📅</a>}
                         <button onClick={() => otworzForm(w)} style={{ background: "rgba(56,189,248,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#38bdf8", cursor: "pointer", fontSize: 14 }}>✏️</button>
                         <button onClick={() => usunWpis(w.id)} style={{ background: "rgba(239,68,68,0.15)", border: "none", borderRadius: 10, padding: "8px 14px", color: "#ef4444", cursor: "pointer", fontSize: 14 }}>🗑</button>
                       </div>
@@ -241,38 +242,38 @@ export default function App() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", alignItems: "flex-end" }} onClick={e => { if (e.target === e.currentTarget) setShowForm(false); }}>
           <div style={{ background: "#1e293b", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", width: "100%", maxWidth: 430, margin: "0 auto", border: "1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 99, margin: "0 auto 20px" }}/>
-            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>{editId ? "✏️ Edytuj wpis" : "🏖 Nowy wpis urlopowy"}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>{editId ? t("editEntry") : t("newEntry")}</div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>📅 Podaj daty → wpis trafi automatycznie do Google Calendar</div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>Liczba godzin *</label>
-              <input type="number" min="0.5" step="0.5" placeholder="np. 8" value={form.godz} onChange={e => setForm(x => ({ ...x, godz: e.target.value }))} style={{ ...inp, fontSize: 28, fontWeight: 800, color: "#38bdf8", textAlign: "center", padding: "14px" }}/>
+              <label style={lbl}>{t("hours")}</label>
+              <input type="number" min="0.5" step="0.5" placeholder={t("hoursPlaceholder")} value={form.godz} onChange={e => setForm(x => ({ ...x, godz: e.target.value }))} style={{ ...inp, fontSize: 28, fontWeight: 800, color: "#38bdf8", textAlign: "center", padding: "14px" }}/>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <div><label style={lbl}>Data od</label><input type="date" value={form.od} onChange={e => setForm(x => ({ ...x, od: e.target.value }))} style={inp}/></div>
-              <div><label style={lbl}>Data do</label><input type="date" value={form.do} onChange={e => setForm(x => ({ ...x, do: e.target.value }))} style={inp}/></div>
+              <div><label style={lbl}>{t("dateFrom")}</label><input type="date" value={form.od} onChange={e => setForm(x => ({ ...x, od: e.target.value }))} style={inp}/></div>
+              <div><label style={lbl}>{t("dateTo")}</label><input type="date" value={form.do} onChange={e => setForm(x => ({ ...x, do: e.target.value }))} style={inp}/></div>
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>Opis</label>
-              <input type="text" placeholder="np. Urlop letni, Wizyta lekarska…" value={form.opis} onChange={e => setForm(x => ({ ...x, opis: e.target.value }))} style={inp}/>
+              <label style={lbl}>{t("description")}</label>
+              <input type="text" placeholder={t("descriptionPlaceholder")} value={form.opis} onChange={e => setForm(x => ({ ...x, opis: e.target.value }))} style={inp}/>
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <label style={lbl}>Status</label>
+              <label style={lbl}>{t("status")}</label>
               <div style={{ display: "flex", gap: 6 }}>
                 {STATUSY.map(s => {
                   const sc = STATUS_COLORS[s]; const on = form.status === s;
-                  return <button key={s} onClick={() => setForm(x => ({ ...x, status: s }))} style={{ flex: 1, padding: "10px 4px", border: "none", borderRadius: 12, background: on ? sc.bg : "rgba(255,255,255,0.07)", color: on ? sc.text : "#64748b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>{s}</button>;
+                  return <button key={s} onClick={() => setForm(x => ({ ...x, status: s }))} style={{ flex: 1, padding: "10px 4px", border: "none", borderRadius: 12, background: on ? sc.bg : "rgba(255,255,255,0.07)", color: on ? sc.text : "#64748b", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>{tStatus(s)}</button>;
                 })}
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: 16, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, background: "transparent", color: "#64748b", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Anuluj</button>
+              <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: 16, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, background: "transparent", color: "#64748b", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>{t("cancel")}</button>
               <button onClick={zapiszWpis} disabled={saving} style={{ flex: 2, padding: 16, border: "none", borderRadius: 16, background: saving ? "rgba(56,189,248,0.4)" : "linear-gradient(135deg,#38bdf8,#818cf8)", color: "#0f172a", fontSize: 15, fontWeight: 800, cursor: saving ? "not-allowed" : "pointer" }}>
-                {saving ? "⏳ Zapisywanie…" : editId ? "Zapisz" : "Dodaj wpis"}
+                {saving ? t("saving") : editId ? t("save") : t("addEntry")}
               </button>
             </div>
           </div>
